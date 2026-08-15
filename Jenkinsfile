@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE      = "votre-username/monpfe"
+        IMAGE      = "nounou666/monpfe"
         VM2_IP     = "192.168.1.101"
         VM3_IP     = "192.168.1.102"
         SONAR_URL  = "http://192.168.1.100:9000"
