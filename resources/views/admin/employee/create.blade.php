@@ -167,7 +167,7 @@
           <!-- ... Previous content ... -->
 
           <div class="col-6">
-            <div class="card flex-fill">
+        
               <div class="card-header">
                 <h5 class="card-title mb-0">{{ __('Allowance') }}</h5>
               </div>
@@ -202,7 +202,7 @@
                 <input type="number" name="overtime_pay" class="form-control" id="overtime_pay" step="0.01" readonly > --}}
               </div>
             </div>
-            <div class="card flex-fill">
+          
               <div class="card-header">
                 <h5 class="card-title mb-0">{{ __('Deductions') }}</h5>
               </div>
