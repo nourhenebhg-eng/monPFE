@@ -50,11 +50,13 @@
                   <a href="{{ Auth::user()->role->slug === 'super-admin' ? route('employee.show', $employee->id) : (Auth::user()->role->slug === 'administrator' ? route('admin.employee.show', $employee->id) : route('hr.employee.show', $employee->id) ) }}" class="btn btn-success btn-sm ms-1 me-1">
                     <i class="fas fa-eye"></i>
                   </a>
-                  <form action="{{ Auth::user()->role->slug === 'super-admin' ? route('employee.destroy', $employee->id) : (Auth::user()->role->slug === 'administrator' ? route('admin.employee.destroy', $employee->id) : route('hr.employee.destroy', $employee->id) ) }}" method="post">
-                    <a href="#" class="btn btn-danger btn-sm" onclick="del(event, this)">
-                      <i class="fas fa-trash-alt"></i>
-                    </a>
-                  </form>
+<form action="{{ Auth::user()->role->slug === 'super-admin' ? route('employee.destroy', $employee->id) : (Auth::user()->role->slug === 'administrator' ? route('admin.employee.destroy', $employee->id) : route('hr.employee.destroy', $employee->id) ) }}" method="POST">
+  @csrf
+  @method('DELETE')
+  <a href="#" class="btn btn-danger btn-sm" onclick="del(event, this)">
+    <i class="fas fa-trash-alt"></i>
+  </a>
+</form>
                 </td>
               </tr>
             @endforeach

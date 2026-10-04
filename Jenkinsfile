@@ -1,12 +1,18 @@
+```groovy
 pipeline {
     agent any
 
-    // ===== DECLENCHEMENT AUTOMATIQUE =====
-    // Jenkins vérifie GitHub toutes les 5 minutes
+    // ============================================================
+    // DECLENCHEMENT AUTOMATIQUE
+    // Vérification de GitHub toutes les 5 minutes
+    // ============================================================
     triggers {
         pollSCM('H/5 * * * *')
     }
 
+    // ============================================================
+    // VARIABLES
+    // ============================================================
     environment {
         IMAGE      = "nounou666/monpfe"
         VM2_IP     = "192.168.1.101"
@@ -17,8 +23,9 @@ pipeline {
 
     stages {
 
-        // ===== STAGE 1 =====
-        // Clone le code depuis GitHub
+        // ========================================================
+        // STAGE 1 : GIT CHECKOUT
+        // ========================================================
         stage('Git Checkout') {
             steps {
                 echo '=== Clonage du code depuis GitHub ==='
@@ -31,8 +38,9 @@ pipeline {
             }
         }
 
-        // ===== STAGE 2 =====
-        // Analyse qualité du code avec SonarQube
+        // ========================================================
+        // STAGE 2 : SONARQUBE
+        // ========================================================
         stage('SonarQube Analysis') {
             steps {
                 echo '=== Analyse qualité du code avec SonarQube ==='
@@ -52,135 +60,165 @@ pipeline {
             }
         }
 
-        // ===== STAGE 3 =====
-        // Scan des fichiers et dépendances avec Trivy
+        // ========================================================
+        // STAGE 3 : TRIVY FILESYSTEM
+        // ========================================================
         stage('Trivy FS Scan') {
             steps {
                 echo '=== Scan sécurité des fichiers avec Trivy ==='
 
-                sh 'trivy fs --severity HIGH,CRITICAL --exit-code 0 .'
+                sh '''
+                    trivy fs \
+                    --severity HIGH,CRITICAL \
+                    --exit-code 0 \
+                    .
+                '''
 
                 echo '=== Scan fichiers terminé ==='
             }
         }
 
-        // ===== STAGE 4 =====
-        // Construction de l'image Docker sur VM2
+        // ========================================================
+        // STAGE 4 : BUILD DOCKER SUR VM2
+        // ========================================================
         stage('Docker Build on VM2') {
             steps {
                 echo '=== Construction image Docker sur VM2 ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm2-ssh',
-                    usernameVariable: 'VM2_USER',
-                    passwordVariable: 'VM2_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM2_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm2-ssh',
+                        usernameVariable: 'VM2_USER',
+                        passwordVariable: 'VM2_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM2_USER}@${VM2_IP} \
-                        'cd /opt/monPFE && git pull origin main && docker build -t ${IMAGE}:${BUILD_NUMBER} .'
-                    """
+                        "$VM2_USER@$VM2_IP" \
+                        "cd /opt/monPFE && \
+                         git pull origin main && \
+                         docker build -t $IMAGE:$BUILD_NUMBER ."
+                    '''
                 }
 
                 echo '=== Image Docker construite avec succès ==='
             }
         }
 
-        // ===== STAGE 5 =====
-        // Scan de l'image Docker avec Trivy
+        // ========================================================
+        // STAGE 5 : TRIVY IMAGE
+        // ========================================================
         stage('Trivy Image Scan') {
             steps {
                 echo '=== Scan sécurité de l image Docker avec Trivy ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm2-ssh',
-                    usernameVariable: 'VM2_USER',
-                    passwordVariable: 'VM2_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM2_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm2-ssh',
+                        usernameVariable: 'VM2_USER',
+                        passwordVariable: 'VM2_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM2_USER}@${VM2_IP} \
-                        'trivy image --severity HIGH,CRITICAL --exit-code 0 ${IMAGE}:${BUILD_NUMBER}'
-                    """
+                        "$VM2_USER@$VM2_IP" \
+                        "trivy image \
+                         --severity HIGH,CRITICAL \
+                         --exit-code 0 \
+                         $IMAGE:$BUILD_NUMBER"
+                    '''
                 }
 
                 echo '=== Scan image Docker terminé ==='
             }
         }
 
-        // ===== STAGE 6 =====
-        // Publication de l'image sur DockerHub
+        // ========================================================
+        // STAGE 6 : PUSH DOCKER HUB
+        // ========================================================
         stage('Docker Push to DockerHub') {
             steps {
                 echo '=== Publication image sur DockerHub ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm2-ssh',
-                    usernameVariable: 'VM2_USER',
-                    passwordVariable: 'VM2_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM2_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm2-ssh',
+                        usernameVariable: 'VM2_USER',
+                        passwordVariable: 'VM2_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM2_USER}@${VM2_IP} \
-                        'docker push ${IMAGE}:${BUILD_NUMBER}'
-                    """
+                        "$VM2_USER@$VM2_IP" \
+                        "docker push $IMAGE:$BUILD_NUMBER"
+                    '''
                 }
 
                 echo '=== Image publiée sur DockerHub ==='
             }
         }
 
-        // ===== STAGE 7 =====
-        // Déploiement de la nouvelle image sur Kubernetes
+        // ========================================================
+        // STAGE 7 : DEPLOIEMENT KUBERNETES
+        // ========================================================
         stage('Deploy to Kubernetes') {
             steps {
                 echo '=== Déploiement sur Kubernetes VM3 ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm3-ssh',
-                    usernameVariable: 'VM3_USER',
-                    passwordVariable: 'VM3_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM3_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm3-ssh',
+                        usernameVariable: 'VM3_USER',
+                        passwordVariable: 'VM3_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM3_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM3_USER}@${VM3_IP} \
-                        'kubectl set image deployment/monpfe-app monpfe-app=${IMAGE}:${BUILD_NUMBER}'
-                    """
+                        "$VM3_USER@$VM3_IP" \
+                        "kubectl set image deployment/monpfe-app \
+                         monpfe-app=$IMAGE:$BUILD_NUMBER"
+                    '''
                 }
 
                 echo '=== Nouvelle image déployée ==='
             }
         }
 
-        // ===== STAGE 8 =====
-        // Attendre que le nouveau déploiement Kubernetes soit prêt
+        // ========================================================
+        // STAGE 8 : ROLLOUT KUBERNETES
+        // ========================================================
         stage('Wait for Kubernetes Rollout') {
             steps {
                 echo '=== Attente du déploiement Kubernetes ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm3-ssh',
-                    usernameVariable: 'VM3_USER',
-                    passwordVariable: 'VM3_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM3_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm3-ssh',
+                        usernameVariable: 'VM3_USER',
+                        passwordVariable: 'VM3_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM3_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM3_USER}@${VM3_IP} \
-                        'kubectl rollout status deployment/monpfe-app --timeout=180s'
-                    """
+                        "$VM3_USER@$VM3_IP" \
+                        "kubectl rollout status \
+                         deployment/monpfe-app \
+                         --timeout=180s"
+                    '''
                 }
 
                 echo '=== Déploiement Kubernetes terminé ==='
             }
         }
 
-        // ===== STAGE 9 =====
-        // Vérifier que l'application répond
+        // ========================================================
+        // STAGE 9 : VERIFICATION APPLICATION
+        // ========================================================
         stage('Wait for Application') {
             steps {
                 echo '=== Vérification de disponibilité de l application ==='
@@ -190,7 +228,7 @@ pipeline {
 
                         HTTP_CODE=$(curl -s -o /dev/null \
                             -w "%{http_code}" \
-                            ${APP_URL})
+                            "$APP_URL")
 
                         echo "Tentative $i/30 - HTTP $HTTP_CODE"
 
@@ -208,25 +246,44 @@ pipeline {
             }
         }
 
-        // ===== STAGE 10 =====
-        // Analyse DAST de l'application avec OWASP ZAP
+        // ========================================================
+        // STAGE 10 : OWASP ZAP
+        // ========================================================
         stage('OWASP ZAP Security Scan') {
             steps {
                 echo '=== Démarrage du scan OWASP ZAP ==='
 
                 sh '''
+                    # Nettoyage du répertoire précédent
                     rm -rf zap-reports
+
+                    # Création du répertoire de rapport
                     mkdir -p zap-reports
 
+                    # Autoriser le conteneur ZAP à écrire le rapport
+                    chmod -R 777 zap-reports
+
+                    echo "=== Lancement OWASP ZAP ==="
+
                     docker run --rm \
-                      -t \
-                      -v "$WORKSPACE/zap-reports:/zap/wrk/:rw" \
-                      ghcr.io/zaproxy/zaproxy:stable \
-                      zap-baseline.py \
-                      -t ${APP_URL} \
-                      -r zap-report.html
+                        --user 0:0 \
+                        -v "$WORKSPACE/zap-reports:/zap/wrk:rw" \
+                        ghcr.io/zaproxy/zaproxy:stable \
+                        zap-baseline.py \
+                        -t "$APP_URL" \
+                        -r zap-report.html \
+                        -I
 
                     echo "=== Scan OWASP ZAP terminé ==="
+
+                    # Vérification du rapport
+                    if [ -f "zap-reports/zap-report.html" ]; then
+                        echo "=== Rapport ZAP généré avec succès ==="
+                        ls -lh zap-reports/zap-report.html
+                    else
+                        echo "ERREUR : rapport ZAP non généré."
+                        exit 1
+                    fi
                 '''
             }
 
@@ -234,29 +291,35 @@ pipeline {
                 always {
                     echo '=== Archivage du rapport OWASP ZAP ==='
 
-                    archiveArtifacts artifacts: 'zap-reports/zap-report.html',
-                                     allowEmptyArchive: true
+                    archiveArtifacts(
+                        artifacts: 'zap-reports/zap-report.html',
+                        allowEmptyArchive: true
+                    )
                 }
             }
         }
 
-        // ===== STAGE 11 =====
-        // Nettoyage de VM2
+        // ========================================================
+        // STAGE 11 : NETTOYAGE VM2
+        // ========================================================
         stage('Cleanup VM2') {
             steps {
                 echo '=== Nettoyage images Docker sur VM2 ==='
 
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm2-ssh',
-                    usernameVariable: 'VM2_USER',
-                    passwordVariable: 'VM2_PASS'
-                )]) {
-                    sh """
-                        sshpass -p '${VM2_PASS}' ssh \
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'vm2-ssh',
+                        usernameVariable: 'VM2_USER',
+                        passwordVariable: 'VM2_PASS'
+                    )
+                ]) {
+                    sh '''
+                        sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
-                        ${VM2_USER}@${VM2_IP} \
-                        'docker rmi ${IMAGE}:${BUILD_NUMBER} || true && docker system prune -f'
-                    """
+                        "$VM2_USER@$VM2_IP" \
+                        "docker rmi $IMAGE:$BUILD_NUMBER || true && \
+                         docker system prune -f"
+                    '''
                 }
 
                 echo '=== Nettoyage terminé ==='
@@ -264,7 +327,9 @@ pipeline {
         }
     }
 
-    // ===== RESULTAT FINAL =====
+    // ============================================================
+    // RESULTAT FINAL
+    // ============================================================
     post {
 
         success {
@@ -294,3 +359,4 @@ pipeline {
         }
     }
 }
+```

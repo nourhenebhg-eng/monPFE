@@ -77,8 +77,9 @@ class UserController extends Controller
         // $employee->salary()->save($salary);
         // return back()->with('success', 'user updated successfully');
         $user->update($request->all());
-        return back()->with('success', 'User updated successfully');
-    }
+        
+return redirect()->route('admin.users.index')->with('success', 'User updated successfully');
+ }
 
     /**
      * Remove the specified resource from storage.

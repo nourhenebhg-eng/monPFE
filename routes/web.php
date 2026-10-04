@@ -119,14 +119,14 @@ Route::middleware('admin')->prefix('admin')->group( function () {
         Route::delete('/{id}', [LeaveController::class, 'destroy'])->name('admin.leaves.destroy');
     });
     // Route::resource('users',UserController::class );
-    Route::prefix('users')->group(function() {
-        Route::get('/', [UserController::class, 'index'])->name('admin.users.index');
-        Route::get('/create', [UserController::class, 'create'])->name('admin.users.create');
-        Route::post('/', [UserController::class, 'store'])->name('admin.users.store');
-        Route::get('/{id}/edit', [UserController::class, 'edit'])->name('admin.users.edit');
-        Route::put('/{id}', [UserController::class, 'update'])->name('admin.users.update');
-        Route::delete('/{id}', [UserController::class, 'destroy'])->name('admin.users.destroy');
-    });
+Route::prefix('users')->group(function() {
+    Route::get('/', [UserController::class, 'index'])->name('admin.users.index');
+    Route::get('/create', [UserController::class, 'create'])->name('admin.users.create');
+    Route::post('/', [UserController::class, 'store'])->name('admin.users.store');
+    Route::get('/{user}/edit', [UserController::class, 'edit'])->name('admin.users.edit');
+    Route::put('/{user}', [UserController::class, 'update'])->name('admin.users.update');
+    Route::delete('/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
+});
     Route::prefix('payroll')->group(function() {
         
         Route::get('/', [PayrollController::class, 'index'])->name('admin.payroll.index');
