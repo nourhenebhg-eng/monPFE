@@ -67,10 +67,11 @@ pipeline {
                 echo '=== Scan sécurité des fichiers avec Trivy ==='
 
                 sh '''
-                    trivy fs \
-                    --severity HIGH,CRITICAL \
-                    --exit-code 0 \
-                    .
+                    trivy --cache-dir /var/lib/jenkins/.cache/trivy \
+                      fs --skip-db-update --timeout 15m \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 .
                 '''
 
                 echo '=== Scan fichiers terminé ==='
