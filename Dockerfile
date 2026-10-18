@@ -12,13 +12,17 @@ RUN npm run build
 
 
 # ==================================================
-# STAGE 2 : Dépendances PHP
+# STAGE 2 : Dépendances PHP (PHP 8.1 = même version que la prod)
 # ==================================================
-FROM composer:latest AS vendorbuild
+FROM php:8.1-cli AS vendorbuild
 WORKDIR /app
 
+# Le binaire composer:2 fonctionne sous PHP 8.1
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --prefer-dist
+RUN composer install \
+    --no-dev --no-scripts --prefer-dist --no-interaction
 
 
 # ==================================================
@@ -49,7 +53,6 @@ COPY . .
 COPY --from=vendorbuild /app/vendor ./vendor
 COPY --from=nodebuild /app/public/build ./public/build
 
-# Plus besoin de composer install ni npm ici
 RUN chown -R $user:www-data /var/www \
     && chmod -R 755 /var/www/storage \
     && chmod -R 755 /var/www/bootstrap/cache
