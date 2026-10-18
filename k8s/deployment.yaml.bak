@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monpfe-app
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: monpfe
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: monpfe
+    spec:
+      containers:
+        - name: monpfe-app
+          image: nounou666/monpfe:12
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: APP_DEBUG
+              value: "false"
+            - name: APP_URL
+              value: "http://192.168.1.102:30000"
+            - name: DB_CONNECTION
+              value: "mysql"
+            - name: DB_HOST
+              value: "monpfe-mysql"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_DATABASE
+              value: "employee_management"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: db-username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: db-password
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: app-key
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

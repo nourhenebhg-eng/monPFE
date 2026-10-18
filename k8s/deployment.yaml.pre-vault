@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monpfe-app
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: monpfe
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: monpfe
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "hrms"
+
+        vault.hashicorp.com/agent-inject-secret-app-key: "secret/data/hrms"
+        vault.hashicorp.com/agent-inject-template-app-key: |
+          {{- with secret "secret/data/hrms" -}}
+          {{ .Data.data.APP_KEY }}
+          {{- end }}
+
+        vault.hashicorp.com/agent-inject-secret-db-database: "secret/data/hrms"
+        vault.hashicorp.com/agent-inject-template-db-database: |
+          {{- with secret "secret/data/hrms" -}}
+          {{ .Data.data.DB_DATABASE }}
+          {{- end }}
+
+        vault.hashicorp.com/agent-inject-secret-db-username: "secret/data/hrms"
+        vault.hashicorp.com/agent-inject-template-db-username: |
+          {{- with secret "secret/data/hrms" -}}
+          {{ .Data.data.DB_USERNAME }}
+          {{- end }}
+
+        vault.hashicorp.com/agent-inject-secret-db-password: "secret/data/hrms"
+        vault.hashicorp.com/agent-inject-template-db-password: |
+          {{- with secret "secret/data/hrms" -}}
+          {{ .Data.data.DB_PASSWORD }}
+          {{- end }}
+    spec:
+      serviceAccountName: hrms-vault
+      containers:
+        - name: monpfe-app
+          image: nounou666/monpfe:13
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: APP_DEBUG
+              value: "false"
+            - name: APP_URL
+              value: "http://192.168.1.102:30000"
+            - name: DB_CONNECTION
+              value: "mysql"
+            - name: DB_HOST
+              value: "monpfe-mysql"
+            - name: DB_PORT
+              value: "3306"
+            - name: DB_DATABASE
+              value: "employee_management"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: db-username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: db-password
+            - name: APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: monpfe-secrets
+                  key: app-key
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

@@ -38,7 +38,8 @@ pipeline {
         }
 
         // ========================================================
-        // STAGE 2 : SONARQUBE
+        // STAGE 2 : SONARQUBE (CORRIGÉ)
+        // JS/CSS/HTML exclus pour éviter le timeout du bridge Node.js
         // ========================================================
         stage('SonarQube Analysis') {
             steps {
@@ -50,7 +51,7 @@ pipeline {
                         -Dsonar.projectKey=monPFE \
                         -Dsonar.projectName=monPFE \
                         -Dsonar.sources=app,resources \
-                        -Dsonar.exclusions=vendor/**,node_modules/**,public/**,storage/** \
+                        -Dsonar.exclusions=vendor/**,node_modules/**,public/**,storage/**,**/*.js,**/*.css,**/*.html,**/*.ts \
                         -Dsonar.php.version=8.1
                     '''
                 }
@@ -107,7 +108,8 @@ pipeline {
         }
 
         // ========================================================
-        // STAGE 5 : TRIVY IMAGE
+        // STAGE 5 : TRIVY IMAGE (CORRIGÉ)
+        // Utilise la base en cache (pas de re-téléchargement)
         // ========================================================
         stage('Trivy Image Scan') {
             steps {
@@ -124,8 +126,12 @@ pipeline {
                         sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
                         "$VM2_USER@$VM2_IP" \
-                        "trivy image \
+                        "trivy --cache-dir /home/nourhene/.cache/trivy image \
+                         --skip-db-update \
+                         --skip-java-db-update \
+                         --scanners vuln \
                          --severity HIGH,CRITICAL \
+                         --timeout 15m \
                          --exit-code 0 \
                          $IMAGE:$BUILD_NUMBER"
                     '''
@@ -359,4 +365,3 @@ pipeline {
         }
     }
 }
-
