@@ -1,2 +1,8 @@
 node_modules/
 public/build/
+vendor/
+.git/
+*.log
+storage/
+bootstrap/cache/
+tests/
