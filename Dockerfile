@@ -12,12 +12,20 @@ RUN npm run build
 
 
 # ==================================================
-# STAGE 2 : Dépendances PHP (PHP 8.1 = même version que la prod)
+# STAGE 2 : Dépendances PHP
+# Basé sur php:8.1-fpm (déjà en cache sur VM2, évite un 2e gros téléchargement)
 # ==================================================
-FROM php:8.1-cli AS vendorbuild
+FROM php:8.1-fpm AS vendorbuild
 WORKDIR /app
 
-# Le binaire composer:2 fonctionne sous PHP 8.1
+RUN apt-get update && apt-get install -y \
+    git curl unzip zip \
+    libpng-dev libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-install \
+        pdo_mysql mbstring exif pcntl bcmath gd zip \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 COPY composer.json composer.lock ./
@@ -43,7 +51,7 @@ RUN apt-get update && apt-get install -y \
 RUN docker-php-ext-install \
     pdo_mysql mbstring exif pcntl bcmath gd zip
 
-RUN useradd -G www-data,root -u $uid -d /home/$user $user
+RUN useradd -G www-data -u $uid -d /home/$user $user
 RUN mkdir -p /home/$user/.composer && \
     chown -R $user:$user /home/$user
 
