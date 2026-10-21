@@ -38,17 +38,28 @@ pipeline {
             }
         }
 
-        stage('Trivy FS Scan') {
-            steps {
-                sh '''
-                    trivy --cache-dir /var/lib/jenkins/.cache/trivy \
-                      fs --skip-db-update --timeout 15m \
-                      --scanners vuln \
-                      --severity HIGH,CRITICAL \
-                      --exit-code 0 .
-                '''
-            }
+stage('Trivy Image Scan') {
+    steps {
+        withCredentials([usernamePassword(
+            credentialsId: 'vm2-ssh',
+            usernameVariable: 'VM2_USER',
+            passwordVariable: 'VM2_PASS')]) {
+            sh '''
+                sshpass -p "$VM2_PASS" ssh \
+                -o StrictHostKeyChecking=no \
+                "$VM2_USER@$VM2_IP" \
+                "trivy --cache-dir /home/nourhene/.cache/trivy image \
+                 --skip-db-update \
+                 --skip-java-db-update \
+                 --scanners vuln \
+                 --severity HIGH,CRITICAL \
+                 --timeout 15m \
+                 --exit-code 0 \
+                 $IMAGE:latest"
+            '''
         }
+    }
+}
 
         // Build on VM2: tag with the build number AND latest.
         // public/hot is removed so Laravel never points to the Vite dev server.
@@ -65,7 +76,7 @@ pipeline {
                         "cd /opt/monPFE && \
                          git pull origin main && \
                          rm -f public/hot && \
-                         docker build -t $IMAGE:$BUILD_NUMBER -t $IMAGE:latest ."
+                         docker build -t $IMAGE:latest ."
                     '''
                 }
             }
@@ -87,8 +98,7 @@ pipeline {
                          --scanners vuln \
                          --severity HIGH,CRITICAL \
                          --timeout 15m \
-                         --exit-code 0 \
-                         $IMAGE:$BUILD_NUMBER"
+                         --exit-code 0 "
                     '''
                 }
             }
@@ -104,8 +114,7 @@ pipeline {
                         sshpass -p "$VM2_PASS" ssh \
                         -o StrictHostKeyChecking=no \
                         "$VM2_USER@$VM2_IP" \
-                        "docker push $IMAGE:$BUILD_NUMBER && \
-                         docker push $IMAGE:latest"
+                        "docker push $IMAGE:latest"
                     '''
                 }
             }
