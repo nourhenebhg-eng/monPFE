@@ -146,24 +146,47 @@ stage('Trivy Image Scan') {
         }
 
         // Checks the app AND that the CSS asset really loads.
-        stage('Wait for Application') {
+ stage('Wait for Application') {
             steps {
                 sh '''
                     for i in $(seq 1 30); do
-                        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$APP_URL/login")
+                        HTTP_CODE=$(curl -s -o /tmp/monpfe-login.html \
+                            -w "%{http_code}" "$APP_URL/login")
+
                         echo "Attempt $i/30 - HTTP $HTTP_CODE"
+
                         if [ "$HTTP_CODE" = "200" ]; then
-                            CSS=$(curl -s "$APP_URL/login" | grep -o '/build/assets/[^"]*\\.css' | head -1)
+                            CSS=$(grep -Eo 'href="[^"]*\\.css([^"]*)?"' \
+                                /tmp/monpfe-login.html \
+                                | head -1 \
+                                | sed 's/^href="//; s/"$//')
+
                             if [ -z "$CSS" ]; then
-                                echo "ERROR: no CSS link found in the page (check public/hot and the Vite build)"
+                                echo "ERROR: no CSS link found in the page"
                                 exit 1
                             fi
-                            curl -sf -o /dev/null "$APP_URL$CSS" || { echo "ERROR: CSS not reachable: $CSS"; exit 1; }
-                            echo "=== Application OK, CSS reachable: $CSS ==="
+
+                            # Accepte les URL absolues et relatives.
+                            case "$CSS" in
+                                http://*|https://*) CSS_URL="$CSS" ;;
+                                /*) CSS_URL="$APP_URL$CSS" ;;
+                                *) CSS_URL="$APP_URL/$CSS" ;;
+                            esac
+
+                            echo "CSS detected: $CSS_URL"
+
+                            curl -sf -o /dev/null "$CSS_URL" || {
+                                echo "ERROR: CSS not reachable: $CSS_URL"
+                                exit 1
+                            }
+
+                            echo "=== Application OK, CSS reachable: $CSS_URL ==="
                             exit 0
                         fi
+
                         sleep 10
                     done
+
                     echo "ERROR: application not reachable."
                     exit 1
                 '''
