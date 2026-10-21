@@ -38,28 +38,17 @@ pipeline {
             }
         }
 
-stage('Trivy Image Scan') {
-    steps {
-        withCredentials([usernamePassword(
-            credentialsId: 'vm2-ssh',
-            usernameVariable: 'VM2_USER',
-            passwordVariable: 'VM2_PASS')]) {
-            sh '''
-                sshpass -p "$VM2_PASS" ssh \
-                -o StrictHostKeyChecking=no \
-                "$VM2_USER@$VM2_IP" \
-                "trivy --cache-dir /home/nourhene/.cache/trivy image \
-                 --skip-db-update \
-                 --skip-java-db-update \
-                 --scanners vuln \
-                 --severity HIGH,CRITICAL \
-                 --timeout 15m \
-                 --exit-code 0 \
-                 $IMAGE:latest"
-            '''
+        stage('Trivy FS Scan') {
+            steps {
+                sh '''
+                    trivy --cache-dir /var/lib/jenkins/.cache/trivy \
+                      fs --skip-db-update --timeout 15m \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --exit-code 0 .
+                '''
+            }
         }
-    }
-}
 
         // Build on VM2: tag with the build number AND latest.
         // public/hot is removed so Laravel never points to the Vite dev server.
@@ -82,27 +71,28 @@ stage('Trivy Image Scan') {
             }
         }
 
-        stage('Trivy Image Scan') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'vm2-ssh',
-                    usernameVariable: 'VM2_USER',
-                    passwordVariable: 'VM2_PASS')]) {
-                    sh '''
-                        sshpass -p "$VM2_PASS" ssh \
-                        -o StrictHostKeyChecking=no \
-                        "$VM2_USER@$VM2_IP" \
-                        "trivy --cache-dir /home/nourhene/.cache/trivy image \
-                         --skip-db-update \
-                         --skip-java-db-update \
-                         --scanners vuln \
-                         --severity HIGH,CRITICAL \
-                         --timeout 15m \
-                         --exit-code 0 "
-                    '''
-                }
-            }
+stage('Trivy Image Scan') {
+    steps {
+        withCredentials([usernamePassword(
+            credentialsId: 'vm2-ssh',
+            usernameVariable: 'VM2_USER',
+            passwordVariable: 'VM2_PASS')]) {
+            sh '''
+                sshpass -p "$VM2_PASS" ssh \
+                -o StrictHostKeyChecking=no \
+                "$VM2_USER@$VM2_IP" \
+                "trivy --cache-dir /home/nourhene/.cache/trivy image \
+                 --skip-db-update \
+                 --skip-java-db-update \
+                 --scanners vuln \
+                 --severity HIGH,CRITICAL \
+                 --timeout 15m \
+                 --exit-code 0 \
+                 $IMAGE:latest"
+            '''
         }
+    }
+}
 
         stage('Docker Push to DockerHub') {
             steps {
