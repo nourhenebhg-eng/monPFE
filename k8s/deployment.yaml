@@ -10,6 +10,9 @@ spec:
       app: monpfe
   strategy:
     type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   template:
     metadata:
       labels:
@@ -45,7 +48,7 @@ spec:
       serviceAccountName: hrms-vault
       containers:
         - name: monpfe-app
-          image: nounou666/monpfe:13
+          image: nounou666/monpfe:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -62,6 +65,13 @@ spec:
               value: "monpfe-mysql"
             - name: DB_PORT
               value: "3306"
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 12
           resources:
             requests:
               cpu: "250m"
