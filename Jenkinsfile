@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -50,8 +51,6 @@ pipeline {
             }
         }
 
-        // Build on VM2: tag with the build number AND latest.
-        // public/hot is removed so Laravel never points to the Vite dev server.
         stage('Docker Build on VM2') {
             steps {
                 withCredentials([usernamePassword(
@@ -71,28 +70,28 @@ pipeline {
             }
         }
 
-stage('Trivy Image Scan') {
-    steps {
-        withCredentials([usernamePassword(
-            credentialsId: 'vm2-ssh',
-            usernameVariable: 'VM2_USER',
-            passwordVariable: 'VM2_PASS')]) {
-            sh '''
-                sshpass -p "$VM2_PASS" ssh \
-                -o StrictHostKeyChecking=no \
-                "$VM2_USER@$VM2_IP" \
-                "trivy --cache-dir /home/nourhene/.cache/trivy image \
-                 --skip-db-update \
-                 --skip-java-db-update \
-                 --scanners vuln \
-                 --severity HIGH,CRITICAL \
-                 --timeout 15m \
-                 --exit-code 0 \
-                 $IMAGE:latest"
-            '''
+        stage('Trivy Image Scan') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'vm2-ssh',
+                    usernameVariable: 'VM2_USER',
+                    passwordVariable: 'VM2_PASS')]) {
+                    sh '''
+                        sshpass -p "$VM2_PASS" ssh \
+                        -o StrictHostKeyChecking=no \
+                        "$VM2_USER@$VM2_IP" \
+                        "trivy --cache-dir /home/nourhene/.cache/trivy image \
+                         --skip-db-update \
+                         --skip-java-db-update \
+                         --scanners vuln \
+                         --severity HIGH,CRITICAL \
+                         --timeout 15m \
+                         --exit-code 0 \
+                         $IMAGE:latest"
+                    '''
+                }
+            }
         }
-    }
-}
 
         stage('Docker Push to DockerHub') {
             steps {
@@ -110,9 +109,6 @@ stage('Trivy Image Scan') {
             }
         }
 
-        // The manifest in Git says :latest and never changes, so ArgoCD
-        // has nothing to revert. A rollout restart makes pods pull the new
-        // :latest (imagePullPolicy: Always).
         stage('Deploy to Kubernetes') {
             steps {
                 withCredentials([usernamePassword(
@@ -145,8 +141,7 @@ stage('Trivy Image Scan') {
             }
         }
 
-        // Checks the app AND that the CSS asset really loads.
- stage('Wait for Application') {
+        stage('Wait for Application') {
             steps {
                 sh '''
                     for i in $(seq 1 30); do
@@ -166,7 +161,6 @@ stage('Trivy Image Scan') {
                                 exit 1
                             fi
 
-                            # Accepte les URL absolues et relatives.
                             case "$CSS" in
                                 http://*|https://*) CSS_URL="$CSS" ;;
                                 /*) CSS_URL="$APP_URL$CSS" ;;
@@ -196,27 +190,59 @@ stage('Trivy Image Scan') {
         stage('OWASP ZAP Security Scan') {
             steps {
                 sh '''
-                    rm -rf zap-reports
-                    mkdir -p zap-reports
-                    chmod -R 777 zap-reports
+                    set -eu
 
-                    docker run --rm \
+                    mkdir -p "$WORKSPACE/zap-reports"
+                    chmod 755 "$WORKSPACE/zap-reports"
+                    rm -f "$WORKSPACE/zap-reports/zap-report.html"
+
+                    echo "=== OWASP ZAP Baseline Scan ==="
+                    echo "Target: $APP_URL"
+
+                    set +e
+                    timeout --signal=TERM --kill-after=15s 8m \
+                      docker run --rm \
                         --user 0:0 \
                         -v "$WORKSPACE/zap-reports:/zap/wrk:rw" \
                         ghcr.io/zaproxy/zaproxy:stable \
                         zap-baseline.py \
                         -t "$APP_URL" \
                         -r zap-report.html \
-                        -I
+                        -I \
+                        -T 3 \
+                        -m 1 \
+                        -z "-silent"
 
-                    if [ -f "zap-reports/zap-report.html" ]; then
-                        ls -lh zap-reports/zap-report.html
+                    ZAP_EXIT=$?
+                    set -e
+
+                    echo "ZAP exit code: $ZAP_EXIT"
+
+                    if [ -f "$WORKSPACE/zap-reports/zap-report.html" ]; then
+                        ls -lh "$WORKSPACE/zap-reports/zap-report.html"
                     else
-                        echo "ERROR: ZAP report not generated."
+                        echo "WARNING: ZAP did not generate an HTML report."
+                    fi
+
+                    if [ "$ZAP_EXIT" -eq 124 ] || [ "$ZAP_EXIT" -eq 137 ]; then
+                        echo "ERROR: ZAP exceeded the 8-minute limit."
                         exit 1
                     fi
+
+                    if [ "$ZAP_EXIT" -ne 0 ] && [ "$ZAP_EXIT" -ne 2 ]; then
+                        echo "ERROR: ZAP scan failed."
+                        exit "$ZAP_EXIT"
+                    fi
+
+                    if [ ! -s "$WORKSPACE/zap-reports/zap-report.html" ]; then
+                        echo "ERROR: HTML report missing or empty."
+                        exit 1
+                    fi
+
+                    echo "=== ZAP scan completed ==="
                 '''
             }
+
             post {
                 always {
                     archiveArtifacts(
@@ -249,9 +275,11 @@ stage('Trivy Image Scan') {
         success {
             echo "PIPELINE OK - Image: ${IMAGE}:${BUILD_NUMBER} (also :latest) - App: ${APP_URL}"
         }
+
         failure {
             echo "PIPELINE FAILED - check the logs above"
         }
+
         always {
             echo '=== End of pipeline ==='
         }
